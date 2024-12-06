@@ -1,1 +1,1 @@
-this is CMake studying
+This is study log.
