@@ -179,7 +179,7 @@
 > - **ADD_EXECUTABLE(main ${SOURCES })**：指示变量 SOURCES 中的源文件需要编译 成一个名称为 main 的**可执行文件**。 ADD_EXECUTABLE() 函数的第一个参数是可执行文件名，第二个参数是要编译的源文件列表。因为这里定义了SOURCE变量，所以就不需要罗列cpp文件了。等价于命令：`ADD_EXECUTABLE(main src/Hello.cpp src/main.cpp)`
 > - **ADD_LIBRARY(hello_library STATIC src/Hello.cpp)**：用于从某些源文件创建一个库，默认生成在构建文件夹。在add_library调用中包含了源文件，用于创建名称为libhello_library.a的静态库。
 > - **TARGET_LINK_LIBRARIES( main Test )**：指明可执行文件 main 需要连接一个名为Test的链接库。添加链接库。
-> - **TARGET_INCLUDE_DIRECTORIES(hello_library PUBLIC ${PROJECT_SOURCE_DIR}/include)**：添加了一个目录，这个目录是库所包含的头文件的目录，并设置库属性为[PUBLIC](https://github.com/SFUMECJF/cmake-examples-Chinese/blob/main/01-basic/1.3  Static Library.md)。
+> - **TARGET_INCLUDE_DIRECTORIES(hello_library PUBLIC ${PROJECT_SOURCE_DIR}/include)**：添加了一个目录，这个目录是库所包含的头文件的目录，并设置库属性为PUBLIC
 > - **MESSAGE(STATUS “Using bundled Findlibdb.cmake…”)**：命令 MESSAGE 会将参数的内容输出到终端。
 > - **FIND_PATH ()** ：指明头文件查找的路径，原型如下：`find_path(< VAR > name1 [path1 path2 ...])` 该命令在参数 path* 指示的目录中查找文件 name1 并将查找到的路径保存在变量 VAR 中。
 > - **FIND_LIBRARY()**： 同 FIND_PATH 类似,用于查找链接库并将结果保存在变量中。
