@@ -1,1 +1,1 @@
-This is Shell studying.
+This is C/Embedded studying.
