@@ -1,1 +1,1 @@
-This is awk study log.
+This is grep study log.
