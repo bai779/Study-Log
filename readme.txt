@@ -1,1 +1,1 @@
-This is grep study log.
+This is sed study log.
