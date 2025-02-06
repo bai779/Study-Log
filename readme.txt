@@ -1,2 +1,1 @@
-This is study log.
-Linux虚拟化学习
+This is awk study log.
