@@ -152,13 +152,238 @@
      从路由器获取ip，开发板没有链接路由器此命令就失效
      ```
 
-   + nfs 网络系统文件命令
+   + nfs 网络文件系统命令
      ```less
      nfs [loadAddress] [[hostIPaddr:]bootfilename]
      loadAddress是保存的DRAM地址
      [hostIPaddr:]bootfilename是要下载的文件地址
      ```
 
+     > 使用nfs命令将zImage下载到开发板DRAM的`0X80800000`地址处
+     > `nfs 80800000 192.168.1.150:/home/baiyanjie/linux/nfs/zImage`
+     >
+     > 需要在`/etc/exports`中设置nfs的导出目录，以确保板子能够正确访问，且设置权限能够正确访问
+     
+   + tftp 网络文件命令(使用TFTP协议)
+
+     ```less
+     Ubuntu作为tftp服务器，需要安装tftp-hpa和tftpd-hpa
+     sudo apt-get install tftp-hpa tftpd-hpa
+     sudo apt-get install xinetd
+     创建一个文件夹来存放文件并设置权限 /home/baiyanjie/linux/tftpboot
+     sudo vim /etc/xinetd.d/tftp
+     ###############################
+      server tftp
+      {
+      socket_type = dgram
+      protocol = udp
+      wait = yes
+      user = root
+      server = /usr/sbin/in.tftpd
+      server_args = -s /home/zuozhongkai/linux/tftpboot/
+      disable = no
+      per_source = 11
+      cps = 100 2
+      flags = IPv4
+      }
+     #################################
+     启动服务sudo service tftpd-hpa start
+     修改配置
+     sudo vim /etc/default/tftpd-hpa
+     ###############################
+      # /etc/default/tftpd-hpaTFTP_USERNAME="tftp"TFTP_DIRECTORY="/home/baiyanjie/linux/tftpboot"TFTP_ADDRESS=":69" 
+     TFTPOPTIONS="-l -c -s" 
+     ###############################
+     重启服务sudo service tftpd-hpa restart
+     
+     tftpboot [loadAddress][[hostIPadde:]bootfilename]
+     tftp不需要输入文件完整路径
+     ```
      
 
-++++`
+6. EMMC和SD卡操作
+
+| 命令            | 操作                                   |
+| --------------- | -------------------------------------- |
+| mmc info        | 输出MMC设备信息                        |
+| mmc read        | 读取MMC中的数据                        |
+| mmc write       | 向MMC设置写入数据                      |
+| mmc rescan      | 扫描MMC设备                            |
+| mmc part        | 列出MMC设备的分区                      |
+| mmc dev         | 切换MMC设备                            |
+| mmc list        | 列出当前有效的所有MMC设备              |
+| mmc hwpartition | 设置MMC设备的分区                      |
+| mmc bootbus     | 设置指定MMC设备的BOOT_BUS_WIDTH域的值  |
+| mmc bootpart    | 设置指定MMC设备的boot和RPMB分区的大小  |
+| mmc partconf    | 设置指定MMC设备的PARTITION_CONFG域的值 |
+| mmc rst         | 复位MMC设备                            |
+| mmc setdsr      | 设置DSR寄存器的值                      |
+
++ mmc read
+
+  ```less
+  mmc read addr blk# cnt
+  addr数据读取到DRAM中的地址
+  blk是读取的起始地址
+  cnt是读取的块的数量(一个块是512字节)
+  ```
+
++ mmc write
+
+  ```less
+  mmc write addr blk# cnt
+  addr 写入MMC中的数据在DRAM中的起始地址
+  blk是要写入MMC块起始地址
+  cnt是写入的块大小
+  ```
+
++ mmc erase
+
+  ```less
+  mmc erase blk# cnt  擦除指定块
+  ```
+
+7. FAT格式文件系统操作命令
+
+   + fatinfo
+     ```less
+     fatinfo <interface> [<dev[:part]
+     用于查询指定MMC设备分区的文件系统信息
+     interface是接口，例如MMC
+     dev是设备号
+     part是分区
+     ```
+
+   + fatls
+
+     ```less
+     fatls <interface> [<dev[:part]>] [directory]
+     查询FAT格式设备的目录和文件信息
+     directory是要查询的目录
+     ```
+
+   + fstype
+     ```less
+     fstype <interface> <dev>:<par
+     查看MMC设备某个分区的文件系统格式
+     ```
+
+   + fatload
+     ```less
+     fatload <interface> [<dev[:part]> [<addr> [<filename> [bytes [pos]]]
+     将指定的文件读取到DRAM中
+     addr是 保存在DRAM中的起始地址
+     filename是要读取的文件名字
+     bytes是读取多少字节的数据，如果为0或省略表示读取整个文件
+     pos是要读取的文件相对于文件首地址的便宜，为0或省略表示从首地址读取
+     ```
+
+   + fatwrite
+     ```less
+     fatwrite <interface> <dev[:part]> <addr> <filename> <byte>
+     将DRAM中的数据写入到MMC设备中，默认未使能，需要在头文件中增加一行宏定义
+     #define CONFIGFATWRITE /* 使能 fatwrite 命令 */
+     
+     
+     ```
+
+8. EXT格式文件系统操作命令
+
+   ```less
+   ext2load ext2ls ext4load ext4ls ext4write
+   ```
+
+9. BOOT操作命令
+
+   + bootz
+     ```less
+     bootz [addr [initrd[:size]] [fdt]]
+     bootz用于启动zImage镜像文件
+     addr是镜像文件在DRAM中的位置
+     initrd是initrd文件在DRAM中的地址，如果不使用initrd用'-'代替
+     fdt是设备树文件在DRAM中的地址
+     ```
+
+   + bootm
+     ```less
+     bootm [addr [initrd[:size]] [fdt
+     bootm和bootz功能类似，但是bootm用于启动uImage镜像文件
+     ```
+
+   + boot
+     ```less
+     boot也是用来启动linux系统，只是boot会读取环境变量bootcmd来启动linux系统
+     如果要使用tftp命令从网络启动linux那么就可以设置bootcmd为
+     "tftp 80800000 zImage; tftp 83000000 imx6ull-14x14-emmc-7-1024x600-c.dtb; bootz 80800000 - 83000000”，
+     ```
+
+10. 其他命令
+
+    + reset
+      复位
+
+    + go
+      跳转到指定地址执行程序
+
+    + run
+
+      用于运行环境变量中定义的命令，方便调试
+
+    + mtest
+      内存读写测试命令，测试DDR
+
+      ```less
+      mtest [start [end [pattern [iterations]]
+      start 是要测试的 DRAM 开始地址
+      end 是结束地址
+      ```
+
+      
+
+++++++++++++
+
+## 顶层makefile
+
+++++
+
+1. 版本号
+   ```less
+   VERSION = 2016
+   PATCHLEVEL = 03
+   SUBLEVEL =
+   EXTRAVERSION =
+   NAME =
+   ```
+
+   > VERSION是主版本号
+   > PATCHLEVEL是补丁版本号
+   >
+   > EXTRAVERSION 是附加版本信息
+
+2. MAKEFLAGS变量
+   ```less
+   MAKEFLAGS += -rR --include-dir=$(CURDIR)
+   +=给MAKEFLAGS追加信息
+   -rR表示禁止使用内置的隐含规则和变量定义
+   --include-dir指明搜索路径
+   $(CURDIR)表示当前路径
+   ```
+
+   > + make支持递归调用
+   >
+   > ```less
+   > $(MAKE)-C subdir
+   > $(MAKE)表示调用make命令，-C指定只目录
+   > 如果要向子make传递或屏蔽变量，使用export，unexport导出或不导出
+   > export VARIABLE …… //导出变量给子 make 。
+   > unexport VARIABLE…… //不导出变量给子 make。
+   > ```
+   >
+   > + `SHELL`和`MAKEFLAGS`变量默认在make执行过程中自动传递给 子make，除非使用unexport声明
+
+3. 命令输出
+   
+
+
+
+
