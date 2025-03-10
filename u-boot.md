@@ -347,7 +347,7 @@
 ++++
 
 1. 版本号
-   ```less
+   ```makefile
    VERSION = 2016
    PATCHLEVEL = 03
    SUBLEVEL =
@@ -361,7 +361,7 @@
    > EXTRAVERSION 是附加版本信息
 
 2. MAKEFLAGS变量
-   ```less
+   ```makefile
    MAKEFLAGS += -rR --include-dir=$(CURDIR)
    +=给MAKEFLAGS追加信息
    -rR表示禁止使用内置的隐含规则和变量定义
@@ -371,7 +371,7 @@
 
    > + make支持递归调用
    >
-   > ```less
+   > ```makefile
    > $(MAKE)-C subdir
    > $(MAKE)表示调用make命令，-C指定只目录
    > 如果要向子make传递或屏蔽变量，使用export，unexport导出或不导出
@@ -382,7 +382,321 @@
    > + `SHELL`和`MAKEFLAGS`变量默认在make执行过程中自动传递给 子make，除非使用unexport声明
 
 3. 命令输出
+
+   V=1
+
+   ```makefile
+   ifeq ("$(origin V)", "command line")
+     KBUILD_VERBOSE = $(V)
+   endif
+   ifndef KBUILD_VERBOSE
+     KBUILD_VERBOSE = 0
+   endif
    
+   ifeq ($(KBUILD_VERBOSE),1)
+     quiet =
+     Q =
+   else
+     quiet=quiet_
+     Q = @
+   endif
+   ```
+
+   > ifeq ("$(origin V)", "command line")
+   >
+   > 使用ifeq来判断断"$(origin V)"和"command line"是否相等
+   >
+   > + origin函数
+   >
+   >   > $(origin <variable>)
+   >   >
+   >   > variable是变量名，返回值是变量来源
+   >
+   > 意思是判断 V 的来源是否是 command line，若是则KBUILD_VERBOSE等于        V 的值；在命令行输入V=1的话那么就KBUILD_VERBOSE=1，实现uboot编译时命令的完整输出，不输入等于0为命令精简输出
+   >
+   > ++++
+   >
+   > ifndef KBUILD_VERBOSE
+   >
+   > 判断KBUILD_VERBOSE是否为1，如果为1变量quiet和Q都为空，否则quiet为'quiet_'，Q为'@'
+   >
+   > makefile中会用到变量quiet和Q来控制编译时是否在终端输出完整的命令
+
+4. 静默输出
+
+   V=0
+
+   ```makefile
+   ifneq ($(filter 4.%,$(MAKE_VERSION)),)	# make-4
+   ifneq ($(filter %s ,$(firstword x$(MAKEFLAGS))),)
+     quiet=silent_
+   endif
+   else					# make-3.8x
+   ifneq ($(filter s% -s%,$(MAKEFLAGS)),)
+     quiet=silent_
+   endif
+   endif
+   
+   export quiet Q KBUILD_VERBOSE
+   ```
+
+   > ifneq ($(filter 4.%,$(MAKE_VERSION)),)	# make-4
+   >
+   > 判断当前版本是否为4.x
+   >
+   > + filter函数
+   >
+   >   > $(filter <pattern...>,\<text>)
+   >   >
+   >   > filter函数表示以pattern模式过滤text字符串中的单词，仅保留符合模式pattern的单词，函数返回值就是符合pattern的字符串
+   >
+   > 意思是filter在MAKE_VERSION中招出符合4.%的字符串，%是通配符
+   >
+   > ++++
+   >
+   > ifneq ($(filter %s ,$(firstword x$(MAKEFLAGS))),)
+   >
+   > 判断filter在$(firstword x$(MAKEFLAGS)))中过滤出符合%s的字符串是否为空
+   >
+   > + firstworld函数
+   >
+   >   > $(firstword \<text>)
+   >   >
+   >   > 用于去除text字符串中的第一个单词，返回值就是获取到的第一个单词
+   >
+   > 当使用make -s 编译时，-s会作为MAKEFLAGS 变量的一部分传递给 Makefile。
+
+5. 设置编译结果输出目录
+   make O=out
+
+   ```makefile
+   ifeq ("$(origin O)", "command line")
+     KBUILD_OUTPUT := $(O)
+   endif
+   PHONY := _all
+   _all:
+   $(CURDIR)/Makefile Makefile: ;
+   
+   ifneq ($(KBUILD_OUTPUT),)
+   saved-output := $(KBUILD_OUTPUT)
+   KBUILD_OUTPUT := $(shell mkdir -p $(KBUILD_OUTPUT) && cd $(KBUILD_OUTPUT) \
+   								&& /bin/pwd)
+   $(if $(KBUILD_OUTPUT),, \
+        $(error failed to create output directory "$(saved-output)"))
+   
+   PHONY += $(MAKECMDGOALS) sub-make
+   
+   $(filter-out _all sub-make $(CURDIR)/Makefile, $(MAKECMDGOALS)) _all: sub-make
+   	@:
+   
+   sub-make: FORCE
+   	$(Q)$(MAKE) -C $(KBUILD_OUTPUT) KBUILD_SRC=$(CURDIR) \
+   	-f $(CURDIR)/Makefile $(filter-out _all sub-make,$(MAKECMDGOALS))
+   skip-makefile := 1
+   endif # ifneq ($(KBUILD_OUTPUT),)
+   endif # ifeq ($(KBUILD_SRC),)
+   ```
+
+   > ifeq ("$(origin O)", "command line")
+   > 判断“O”是否来自命令行，若是则 KBUILD_OUTPUT := $(O)
+   >
+   > 因此变量KBUILD_OUTPUT 就是输出目录
+   >
+   > ++++
+   >
+   > ifneq ($(KBUILD_OUTPUT),)
+   >
+   > 判断是否为空
+   >
+   > ++++
+   >
+   > KBUILD_OUTPUT := $(shell mkdir -p $(KBUILD_OUTPUT) && cd $(KBUILD_OUTPUT) \
+   >
+   > ​                && /bin/pwd)
+   >
+   > 调用mkdir创建KBUILD_OUTPUT 目录，创建成功之后的绝对路径赋值给KBUILD_OUTPUT 
+
+6. 代码检查
+   make C=1
+
+   ```makefile
+   ifeq ("$(origin C)", "command line")
+     KBUILD_CHECKSRC = $(C)
+   endif
+   ifndef KBUILD_CHECKSRC
+     KBUILD_CHECKSRC = 0
+   endif
+   ```
+
+   > ifeq ("$(origin C)", "command line")
+   >
+   > 判断C是否来自命令行，若是则将C赋值给KBUILD_CHECKSRC，否则为0
+
+7. 模块编译
+   make M=dir   旧语法make SUBDIRS=dir
+
+   ```makefile
+   ifdef SUBDIRS
+     KBUILD_EXTMOD ?= $(SUBDIRS)
+   endif
+   
+   ifeq ("$(origin M)", "command line")
+     KBUILD_EXTMOD := $(M)
+   endif
+   
+   ifdef SUBDIRS
+     KBUILD_EXTMOD ?= $(SUBDIRS)
+   endif
+   
+   ifeq ("$(origin M)", "command line")
+     KBUILD_EXTMOD := $(M)
+   endif
+   
+   PHONY += all
+   ifeq ($(KBUILD_EXTMOD),)
+   _all: all
+   else
+   _all: modules
+   endif
+   
+   ifeq ($(KBUILD_SRC),)
+           # building in the source tree
+           srctree := .
+   else
+           ifeq ($(KBUILD_SRC)/,$(dir $(CURDIR)))
+                   # building in a subdirectory of the source tree
+                   srctree := ..
+           else
+                   srctree := $(KBUILD_SRC)
+           endif
+   endif
+   objtree		:= .
+   src		:= $(srctree)
+   obj		:= $(objtree)
+   
+   VPATH		:= $(srctree)$(if $(KBUILD_EXTMOD),:$(KBUILD_EXTMOD))
+   
+   export srctree objtree VPATH
+   ```
+
+   > ifdef SUBDIRS
+   >
+   >  KBUILD_EXTMOD ?= $(SUBDIRS)
+   >
+   > endif
+   >
+   > 判断SUBDIRS是否定义，若是则将其赋值到KBUILD_EXTMOD，这里是为了支持老语法
+   > ++++
+   >
+   > ifeq ("$(origin M)", "command line")
+   >
+   >  KBUILD_EXTMOD := $(M)
+   >
+   > endif
+   >
+   > 判断是否在命令定义M，并将其赋值到KBUILD_EXTMOD
+   >
+   > +++
+   >
+   > ifeq ($(KBUILD_EXTMOD),)
+   >
+   > 判断KBUILD_EXTMOD是否为空，若是则\_all依赖all，因此要先编译all，否则默认\_all以来modules，也就是先编译模块，一般不会在uboot编译模块，所以会编译all这个目标
+   >
+   > ++++
+   >
+   > ifeq ($(KBUILD_SRC),)
+   >
+   > 判断是否为空，若空则设置变量srctrss为当前目录，即 "." ，一般不设置KBUILD_SRC
+   >
+   > +++++
+   >
+   > objtree   := .
+   >
+   > 设置为当前目录
+   >
+   > +++
+   >
+   > src   := $(srctree)
+   >
+   > obj   := $(objtree)
+   >
+   > 设置为当前目录
+   >
+   > +++
+   >
+   > export srctree objtree VPATH
+   >
+   > 导出变量
+
+8. 获取主机架构和系统
+   ```makefile
+   HOSTARCH := $(shell uname -m | \
+   	sed -e s/i.86/x86/ \
+   	    -e s/sun4u/sparc64/ \
+   	    -e s/arm.*/arm/ \
+   	    -e s/sa110/arm/ \
+   	    -e s/ppc64/powerpc/ \
+   	    -e s/ppc/powerpc/ \
+   	    -e s/macppc/powerpc/\
+   	    -e s/sh.*/sh/)
+   
+   HOSTOS := $(shell uname -s | tr '[:upper:]' '[:lower:]' | \
+   	    sed -e 's/\(cygwin\).*/cygwin/')
+   
+   export	HOSTARCH HOSTOS
+   ```
+
+   >变量HOSTARCH用于保存主机架构
+   >
+   >调用shell命令uname -m 获取主机架构
+   >
+   >使用sed来将获取到的架构替换后面的路径
+   >
+   >+++
+   >
+   >uname -s 获取主机名字
+   >
+   >tr '[:upper:]' '[:lower:]'”表示将所有的大写字母替换为小写字母
+
+9. 设置目标架构，交叉编译器和配置文件
+
+   make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf-
+
+   ```makefile
+   ifeq ($(HOSTARCH),$(ARCH))
+   CROSS_COMPILE ?=
+   endif
+   
+   KCONFIG_CONFIG	?= .config
+   export KCONFIG_CONFIG
+   ```
+
+10. 调用scripts/Kbuild.include
+   ```makefile
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
